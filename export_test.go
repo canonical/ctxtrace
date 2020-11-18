@@ -4,3 +4,7 @@
 package ctxtrace
 
 var TraceIdKey = traceIDContextKey{}
+
+func IsValidTraceID(id string) bool {
+	return isValidTraceID(id)
+}

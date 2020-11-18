@@ -4,7 +4,6 @@
 // Package tracectx provides tracing methods that easy the task of
 // keeping a trace id between HTTP client and services by handling
 // the conversion between HTTP header and zapctx tracing into context.Context.
-
 package ctxtrace
 
 import (
@@ -30,37 +29,21 @@ func NewTraceID() string {
 	return uuid.New().String()
 }
 
-// NewTracedContext adds a trace-id zapctx field with a generated trace id. It
+// WithTraceField adds a trace-id zapctx field with a generated trace id. It
 // returns the new context with the embedded trace id.
-func NewTracedContext(ctx context.Context) context.Context {
+func WithTraceField(ctx context.Context) context.Context {
 	id := NewTraceID()
-	ctx = withZap(ctx, id)
 	ctx = ContextWithTraceID(ctx, id)
 	return ctx
-}
-
-// TracedContext adds a trace-id zapctx field with a given trace id or generate
-// a new one. It returns the new context with the embedded trace id.
-func TracedContext(ctx context.Context, id string) context.Context {
-	if !IsValidTraceID(id) {
-		return NewTracedContext(ctx)
-	}
-	ctx = withZap(ctx, id)
-	ctx = ContextWithTraceID(ctx, id)
-	return ctx
-}
-
-// withZap returns a context.Context with the given trace ID field set.
-func withZap(ctx context.Context, id string) context.Context {
-	return zapctx.WithFields(ctx, zap.String(traceIDCtx, id))
 }
 
 // ContextWithTraceID returns a context.Context with the given trace ID set.
 func ContextWithTraceID(ctx context.Context, id string) context.Context {
+	ctx = zapctx.WithFields(ctx, zap.String(traceIDCtx, id))
 	return context.WithValue(ctx, traceIDContextKey{}, id)
 }
 
-// WithTestingTraceID returns a context with the given trace ID set with a
+// ContextWithTestingTraceID returns a context with the given trace ID set with a
 // fixed prefix value indicating that this request should not considered
 // for auditing purposes.
 func ContextWithTestingTraceID(ctx context.Context, id string) context.Context {
@@ -72,8 +55,8 @@ func IsTestingTraceID(id string) bool {
 	return strings.HasPrefix(id, testingTraceIDPrefix)
 }
 
-// IsValidTraceID returns true if the provided id is in the expected trace id format.
-func IsValidTraceID(id string) bool {
+// isValidTraceID returns true if the provided id is in the expected trace id format.
+func isValidTraceID(id string) bool {
 	if id == "" {
 		return false
 	}
@@ -99,15 +82,17 @@ func TraceIDFromContext(ctx context.Context) string {
 //	 ctx := tracectx.HTTPTracedContext(rw, r)
 //   ...
 //  }
-func HTTPTracedContext(rw http.ResponseWriter, req *http.Request) context.Context {
-	id := ensureTraceHeader(req)
-	rw.Header().Set(TraceIDHeader, id)
-	return TracedContext(req.Context(), id)
-}
+//func HTTPTracedContext(rw http.ResponseWriter, req *http.Request) context.Context {
+//	id := ensureTraceHeader(req)
+//	rw.Header().Set(TraceIDHeader, id)
+//	return ContextWithTraceID(req.Context(), id)
+//}
 
-func ensureTraceHeader(req *http.Request) string {
+// TraceIDFromRequest returns the trace id from the request header or create a new one
+// if it is empty.
+func TraceIDFromRequest(req *http.Request) string {
 	existingTraceID := req.Header.Get(TraceIDHeader)
-	if IsValidTraceID(existingTraceID) {
+	if isValidTraceID(existingTraceID) {
 		return existingTraceID
 	}
 	return NewTraceID()
@@ -118,7 +103,7 @@ func ensureTraceHeader(req *http.Request) string {
 // a new one then set it to the request header.
 func SetTraceHeader(ctx context.Context, req *http.Request) {
 	id := TraceIDFromContext(ctx)
-	if !IsValidTraceID(id) {
+	if !isValidTraceID(id) {
 		id = NewTraceID()
 	}
 	req.Header.Set(TraceIDHeader, id)
