@@ -4,65 +4,23 @@
 package ctxtrace_test
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/juju/zaputil/zapctx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	ctxtrace "github.com/CanonicalLtd/tracectx"
+	"github.com/CanonicalLtd/ctxtrace"
 )
 
 func TestNewTraceID(t *testing.T) {
 	c := qt.New(t)
 	traceID := ctxtrace.NewTraceID()
 
-	c.Assert(traceID, qt.Satisfies, ctxtrace.IsValidTraceID)
-}
-
-func TestWithTraceField(t *testing.T) {
-	ctx := context.Background()
-
-	var buffer bytes.Buffer
-	logger := newLogger(&buffer)
-	ctx = zapctx.WithLogger(ctx, logger)
-
-	c := qt.New(t)
-	tracedContext := ctxtrace.WithTraceField(ctx)
-
-	traceID, ok := tracedContext.Value(ctxtrace.TraceIdKey).(string)
-	c.Assert(ok, qt.IsTrue)
-	c.Assert(traceID, qt.Satisfies, ctxtrace.IsValidTraceID)
-
-	zapctx.Logger(tracedContext).Info("")
-	c.Assert(buffer.String(), qt.Contains, traceID)
-}
-
-func TestIsValidTraceID(t *testing.T) {
-	c := qt.New(t)
-	tests := []struct {
-		name  string
-		id    string
-		valid bool
-	}{{
-		name: "empty id",
-		id:   "",
-	}, {
-		name: "invalid id",
-		id:   "asdasdasdas",
-	}, {
-		name:  "valid id",
-		id:    ctxtrace.NewTraceID(),
-		valid: true,
-	}}
-	for _, test := range tests {
-		c.Assert(ctxtrace.IsValidTraceID(test.id), qt.Equals, test.valid)
-	}
+	c.Assert(traceID, qt.Not(qt.IsNil))
 }
 
 func TestSetTraceHeaderFromContext(t *testing.T) {
@@ -83,13 +41,13 @@ func TestSetTraceHeaderFromContext(t *testing.T) {
 		}}, {
 		name: "from existing context trace id",
 		args: args{
-			ctx: ctxtrace.ContextWithTraceID(context.Background(), ctxtrace.NewTraceID()),
+			ctx: ctxtrace.WithTraceID(context.Background(), ctxtrace.NewTraceID()),
 			req: dummyRequest,
 		}},
 	}
 	for _, tt := range tests {
 		ctxtrace.SetTraceHeader(tt.args.ctx, tt.args.req)
-		c.Assert(ctxtrace.IsValidTraceID(tt.args.req.Header.Get(ctxtrace.TraceIDHeader)), qt.IsTrue)
+		c.Assert(tt.args.req.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
 	}
 }
 
@@ -124,5 +82,5 @@ func TestTraceIDFromRequestWithEmptyID(t *testing.T) {
 	dummyRequest, _ := http.NewRequest("GET", "https://example.com/path", nil)
 
 	requestTraceID := ctxtrace.TraceIDFromRequest(dummyRequest)
-	c.Assert(requestTraceID, qt.Satisfies, ctxtrace.IsValidTraceID)
+	c.Assert(requestTraceID, qt.Not(qt.IsNil))
 }

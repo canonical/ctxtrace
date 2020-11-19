@@ -1,9 +1,9 @@
 // Copyright 2020 Canonical Ltd.
 // Licensed under the LGPLv3, see LICENCE file for details.
 
-// Package tracectx provides tracing methods that easy the task of
+// Package ctxtrace provides tracing methods that easy the task of
 // keeping a trace id between HTTP client and services by handling
-// the conversion between HTTP header and zapctx tracing into context.Context.
+// the conversion between HTTP header and context.Context.
 package ctxtrace
 
 import (
@@ -12,13 +12,11 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/juju/zaputil/zapctx"
-	"go.uber.org/zap"
 )
 
 const (
 	TraceIDHeader        = "X-Trace-Id"
-	traceIDCtx           = "trace_id"
+	TraceIDCtx           = "trace_id"
 	testingTraceIDPrefix = "testing-"
 )
 
@@ -29,34 +27,8 @@ func NewTraceID() string {
 	return uuid.New().String()
 }
 
-// WithTraceField adds a trace-id zapctx field with a generated trace id. It
-// returns the new context with the embedded trace id. This method is ideal
-// to add the trace_id field when creating a new trace source, e.g., a cli
-// command:
-//  ctx := ctxtrace.WithTraceField(cmd.Context())
-// This method sets the given context with a zap entry such as:
-//  {"trace_id":"0ec8fad4-c77e-4631-9de7-6788e1b06770"}
-// so it should not be used in a context that already has trace id. To set
-// a specific trace id to the context use ContextWithTraceID.
-func WithTraceField(ctx context.Context) context.Context {
-	id := NewTraceID()
-	ctx = ContextWithTraceID(ctx, id)
-	return ctx
-}
-
-// ContextWithTraceID returns a context.Context with the given trace ID set.
-// This method sets the given id into the trace_id context zap entry, so it
-// is ideal when needs to transition from a non-traced context to a traced one.
-// For example, when setting up HTTP handlers one usually may use something like
-//  r.HandlerFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
-//		traceID := ctxtrace.TraceIDFromRequest(r)
-//		ctx := ctxtrace.ContextWithTraceID(r.Context(), traceID)
-//      ...
-//  }
-// to transition between the trace header from the incoming request to the
-// internal context enriched with a trace_id entry.
-func ContextWithTraceID(ctx context.Context, id string) context.Context {
-	ctx = zapctx.WithFields(ctx, zap.String(traceIDCtx, id))
+// WithTraceID returns a context.Context with the given trace ID set.
+func WithTraceID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, traceIDContextKey{}, id)
 }
 
@@ -79,10 +51,10 @@ func TraceIDFromContext(ctx context.Context) string {
 // to extract the trace id from the request and inject it into a following context.
 func TraceIDFromRequest(req *http.Request) string {
 	existingTraceID := req.Header.Get(TraceIDHeader)
-	if isValidTraceID(existingTraceID) {
-		return existingTraceID
+	if existingTraceID == "" {
+		return NewTraceID()
 	}
-	return NewTraceID()
+	return existingTraceID
 }
 
 // SetTraceHeader sets the given context trace id value into the given request
@@ -104,22 +76,10 @@ func TraceIDFromRequest(req *http.Request) string {
 // trace id header.
 func SetTraceHeader(ctx context.Context, req *http.Request) {
 	id := TraceIDFromContext(ctx)
-	if !isValidTraceID(id) {
+	if id == "" {
 		id = NewTraceID()
 	}
 	req.Header.Set(TraceIDHeader, id)
-}
-
-// isValidTraceID returns true if the provided id is in the expected trace id format.
-func isValidTraceID(id string) bool {
-	if id == "" {
-		return false
-	}
-	if IsTestingTraceID(id) {
-		return true
-	}
-	_, err := uuid.Parse(id)
-	return err == nil
 }
 
 // ContextWithTestingTraceID returns a context with the given trace ID set with a
@@ -127,7 +87,7 @@ func isValidTraceID(id string) bool {
 // testing purposes only. This method could be used to discard testing requests
 // from the auditing process.
 func ContextWithTestingTraceID(ctx context.Context, id string) context.Context {
-	return ContextWithTraceID(ctx, testingTraceIDPrefix+id)
+	return WithTraceID(ctx, testingTraceIDPrefix+id)
 }
 
 // IsTestingTraceID returns whether a trace id is specially crafted for testing

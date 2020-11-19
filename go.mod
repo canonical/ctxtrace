@@ -1,4 +1,4 @@
-module github.com/CanonicalLtd/tracectx
+module github.com/CanonicalLtd/ctxtrace
 
 go 1.14
 
