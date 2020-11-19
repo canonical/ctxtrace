@@ -1,8 +1,8 @@
 // Copyright 2020 Canonical Ltd.
 // Licensed under the LGPLv3, see LICENCE file for details.
 
-// Package ctxtrace provides tracing methods that easy the task of
-// keeping a trace id between HTTP client and services by handling
+// Package ctxtrace provides tracing methods that simplify the task of
+// keeping a trace id between HTTP clients and services by handling
 // the conversion between HTTP header and context.Context.
 package ctxtrace
 
@@ -38,10 +38,10 @@ func TraceIDFromContext(ctx context.Context) string {
 	return id
 }
 
-// TraceIDFromRequest returns the trace id from the request header or create a new one
-// if it is empty. Similar to ContextWithTraceID this method fits well into a places
-// where one needs to transition between an incoming request to some action based on
-// the extracted (or new) trace id from the request header.
+// TraceIDFromRequest returns the trace id from the request header or creates
+// a new one if it is empty. Similar to ContextWithTraceID this method fits
+// well into places where one needs to transition from an incoming request
+// to some action based on the extracted (or new) trace id from the request header.
 // For example, when setting up HTTP handlers one usually may use something like
 //  r.HandlerFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
 //		traceID := ctxtrace.TraceIDFromRequest(r)
@@ -58,7 +58,7 @@ func TraceIDFromRequest(req *http.Request) string {
 }
 
 // SetTraceHeader sets the given context trace id value into the given request
-// header trace id. If the given context does not contain trace id value, this
+// header trace id. If the given context does not contain a trace id value, this
 // method will generate a new one then set it to the request header. This method
 // is ideally placed into a http client that will transmit the internal context's
 // trace id through the X-Trace-Id parameter to an external service. For instance
@@ -72,8 +72,8 @@ func TraceIDFromRequest(req *http.Request) string {
 //		ctxtrace.SetTraceHeader(ctx, req)
 //		return t.Doer.Do(req)
 //  }
-// so it gets the request context from the caller client transforms it into a
-// trace id header.
+// so it gets the request context from the caller client and then transforms
+// it into a trace id header.
 func SetTraceHeader(ctx context.Context, req *http.Request) {
 	id := TraceIDFromContext(ctx)
 	if id == "" {
