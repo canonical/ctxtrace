@@ -82,11 +82,11 @@ func SetTraceHeader(ctx context.Context, req *http.Request) {
 	req.Header.Set(TraceIDHeader, id)
 }
 
-// ContextWithTestingTraceID returns a context with the given trace ID set with a
-// fixed testing prefix value indicating that this request should be considered for
+// WithTestingTraceID returns a context with the given trace ID set with a fixed
+// testing prefix value indicating that this request should be considered for
 // testing purposes only. This method could be used to discard testing requests
 // from the auditing process.
-func ContextWithTestingTraceID(ctx context.Context, id string) context.Context {
+func WithTestingTraceID(ctx context.Context, id string) context.Context {
 	return WithTraceID(ctx, testingTraceIDPrefix+id)
 }
 
