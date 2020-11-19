@@ -5,15 +5,12 @@ package ctxtrace_test
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
-	"github.com/CanonicalLtd/ctxtrace"
+	"github.com/canonical/ctxtrace"
 )
 
 func TestNewTraceID(t *testing.T) {
@@ -60,20 +57,6 @@ func TestTraceIDFromRequest(t *testing.T) {
 
 	requestTraceID := ctxtrace.TraceIDFromRequest(dummyRequest)
 	c.Assert(requestTraceID, qt.Equals, traceID)
-}
-
-func newLogger(w io.Writer) *zap.Logger {
-	config := zapcore.EncoderConfig{
-		MessageKey:  "msg",
-		LevelKey:    "level",
-		EncodeLevel: zapcore.CapitalLevelEncoder,
-	}
-	core := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(config),
-		zapcore.AddSync(w),
-		zapcore.InfoLevel,
-	)
-	return zap.New(core)
 }
 
 func TestTraceIDFromRequestWithEmptyID(t *testing.T) {
