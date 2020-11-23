@@ -97,3 +97,32 @@ func TestHandlerWhenHeaderIsGiven(t *testing.T) {
 func dummyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+
+func TestNewRoundTripper(t *testing.T) {
+	c := qt.New(t)
+	srv := httptest.NewServer(ctxtrace.Handler(http.HandlerFunc(dummyHandler)))
+	defer srv.Close()
+
+	client := NewTestClient(TestRoundTripper{r: ctxtrace.NewRoundTripper(nil), c :c})
+	_, err := client.Get(srv.URL)
+	c.Assert(err, qt.IsNil)
+}
+
+// TestRoundTripper wraps around the RoundTripper we are testing and asserts
+// for the presence of a trace id in the request.
+type TestRoundTripper struct {
+	r http.RoundTripper
+	c *qt.C
+}
+
+func (r TestRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.c.Assert(req.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
+	return r.r.RoundTrip(req)
+}
+
+// NewTestClient returns *http.Client with Transport replaced to avoid making real calls
+func NewTestClient(rt http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: rt,
+	}
+}
