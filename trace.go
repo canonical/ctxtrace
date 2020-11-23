@@ -16,7 +16,6 @@ import (
 
 const (
 	TraceIDHeader        = "X-Trace-Id"
-	TraceIDCtx           = "trace_id"
 	testingTraceIDPrefix = "testing-"
 )
 
@@ -94,4 +93,17 @@ func WithTestingTraceID(ctx context.Context, id string) context.Context {
 // purposes only.
 func IsTestingTraceID(id string) bool {
 	return strings.HasPrefix(id, testingTraceIDPrefix)
+}
+
+// Handler is a handler that get the trace id from the request, if empty generate one, put it in the context
+// and set it on the response.
+func Handler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+		traceID := TraceIDFromRequest(r)
+		if traceID == "" {
+			traceID = NewTraceID()
+		}
+		w.Header().Set(TraceIDHeader, traceID)
+		h.ServeHTTP(w, r.WithContext(WithTraceID(r.Context(), traceID)))
+	})
 }
