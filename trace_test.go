@@ -6,6 +6,7 @@ package ctxtrace_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -66,4 +67,33 @@ func TestTraceIDFromRequestWithEmptyID(t *testing.T) {
 
 	requestTraceID := ctxtrace.TraceIDFromRequest(dummyRequest)
 	c.Assert(requestTraceID, qt.Not(qt.IsNil))
+}
+
+func TestHandlerWhenNoHeaderIsGiven(t *testing.T) {
+	c := qt.New(t)
+	srv := httptest.NewServer(ctxtrace.Handler(http.HandlerFunc(dummyHandler)))
+	defer srv.Close()
+
+	response, err := http.DefaultClient.Get(srv.URL)
+	c.Assert(err, qt.IsNil)
+	c.Assert(response.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
+}
+
+func TestHandlerWhenHeaderIsGiven(t *testing.T) {
+	c := qt.New(t)
+	srv := httptest.NewServer(ctxtrace.Handler(http.HandlerFunc(dummyHandler)))
+	defer srv.Close()
+
+	request, err := http.NewRequest("GET", srv.URL, nil)
+	c.Assert(err, qt.IsNil)
+	traceID := ctxtrace.NewTraceID()
+	request.Header.Set(ctxtrace.TraceIDHeader, traceID)
+
+	response, err := http.DefaultClient.Do(request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(response.Header.Get(ctxtrace.TraceIDHeader), qt.Equals, traceID)
+}
+
+func dummyHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }
