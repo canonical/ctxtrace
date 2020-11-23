@@ -8,14 +8,14 @@ package ctxtrace
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"net/http"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 const (
 	TraceIDHeader        = "X-Trace-Id"
+	TraceIDCtx = "trace_id"
 	testingTraceIDPrefix = "testing-"
 )
 
@@ -56,7 +56,7 @@ func TraceIDFromRequest(req *http.Request) string {
 	return existingTraceID
 }
 
-// SetTraceHeader sets the given context trace id value into the given request
+// setTraceHeader sets the given context trace id value into the given request
 // header trace id. If the given context does not contain a trace id value, this
 // method will generate a new one then set it to the request header. This method
 // is ideally placed into a http client that will transmit the internal context's
@@ -68,12 +68,12 @@ func TraceIDFromRequest(req *http.Request) string {
 //
 //  func (t tracedDoer) Do(req *http.Request) (*http.Response, error) {
 //		ctx := req.Context()
-//		ctxtrace.SetTraceHeader(ctx, req)
+//		ctxtrace.setTraceHeader(ctx, req)
 //		return t.Doer.Do(req)
 //  }
 // so it gets the request context from the caller client and then transforms
 // it into a trace id header.
-func SetTraceHeader(ctx context.Context, req *http.Request) {
+func setTraceHeader(ctx context.Context, req *http.Request) {
 	id := TraceIDFromContext(ctx)
 	if id == "" {
 		id = NewTraceID()
@@ -106,4 +106,23 @@ func Handler(h http.Handler) http.Handler {
 		w.Header().Set(TraceIDHeader, traceID)
 		h.ServeHTTP(w, r.WithContext(WithTraceID(r.Context(), traceID)))
 	})
+}
+
+func NewRoundTripper(tripper http.RoundTripper) http.RoundTripper {
+	if tripper == nil {
+		return &RoundTripper{r: http.DefaultTransport}
+	}
+	return &RoundTripper{r: tripper}
+}
+
+// RoundTripper implements http.RoundTripper.
+type RoundTripper struct {
+	r           http.RoundTripper
+}
+
+
+// RoundTrip implements http.Router interface.
+func (rt RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	setTraceHeader(req.Context(), req)
+	return rt.r.RoundTrip(req)
 }

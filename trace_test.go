@@ -43,7 +43,7 @@ func TestSetTraceHeaderFromContext(t *testing.T) {
 		}},
 	}
 	for _, tt := range tests {
-		ctxtrace.SetTraceHeader(tt.args.ctx, tt.args.req)
+		ctxtrace.setTraceHeader(tt.args.ctx, tt.args.req)
 		c.Assert(tt.args.req.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
 	}
 }
