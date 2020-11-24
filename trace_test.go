@@ -25,7 +25,7 @@ func TestWithTraceIDEmpty(t *testing.T) {
 	c := qt.New(t)
 	ctx := ctxtrace.WithTraceID(context.Background(), "")
 	traceID := ctxtrace.TraceIDFromContext(ctx)
-	c.Assert(traceID, qt.Not(qt.IsNil))
+	c.Assert(traceID, qt.Not(qt.Equals), "")
 }
 
 func TestWithTraceID(t *testing.T) {
@@ -77,7 +77,7 @@ func TestHandlerWhenHeaderIsGiven(t *testing.T) {
 }
 
 func dummyHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
+	// The default behavior is w.WriteHeader(http.StatusOK)
 }
 
 func TestNewRoundTripper(t *testing.T) {

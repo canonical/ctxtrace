@@ -39,9 +39,8 @@ func NewTraceID() string {
 // containing a context with this value. If the given ID is "" then an new
 // random ID will be created.
 func WithTraceID(ctx context.Context, id string) context.Context {
-	traceID := id
-	if traceID == "" {
-		traceID = NewTraceID()
+	if id == "" {
+		id = NewTraceID()
 	}
 	return context.WithValue(ctx, traceIDContextKey{}, id)
 }
@@ -53,15 +52,14 @@ func WithTraceID(ctx context.Context, id string) context.Context {
 // header for requests containing a context with this value. This method could
 // be used to discard testing requests from the auditing process.
 func WithTestingTraceID(ctx context.Context, id string) context.Context {
-	traceID := id
-	if traceID == "" {
-		traceID = NewTraceID()
+	if id == "" {
+		id = NewTraceID()
 	}
 	// Avoid prepending it again if it is already there.
-	if !strings.HasPrefix(traceID, testingTraceIDPrefix) {
-		traceID = testingTraceIDPrefix + traceID
+	if !strings.HasPrefix(id, testingTraceIDPrefix) {
+		id = testingTraceIDPrefix + id
 	}
-	return WithTraceID(ctx, traceID)
+	return WithTraceID(ctx, id)
 }
 
 // IsTestingTraceID returns whether a trace id is specially crafted for testing
