@@ -8,14 +8,15 @@ package ctxtrace
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const (
 	TraceIDHeader        = "X-Trace-Id"
-	TraceIDCtx 			 = "trace_id"
+	TraceIDCtx           = "trace_id"
 	testingTraceIDPrefix = "testing-"
 )
 
@@ -37,66 +38,61 @@ func TraceIDFromContext(ctx context.Context) string {
 	return id
 }
 
-// Handler is a handler that get the trace id from the request, if empty generate one,
-// put it in the context and set it on the response.
+// Handler is a handler that get the trace id from the request, if empty generate
+// a new one, put it in the context and set it on the response.
 func Handler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
-		traceID := traceIDFromRequest(r)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		traceID := r.Header.Get(TraceIDHeader)
+		if traceID == "" {
+			traceID = NewTraceID()
+		}
 		w.Header().Set(TraceIDHeader, traceID)
 		h.ServeHTTP(w, r.WithContext(WithTraceID(r.Context(), traceID)))
 	})
 }
 
-// NewRoundTripper creates a http.RoundTripper that transmits the trace id
-// from the incoming request to the next one. It is ideally placed
-// when declaring a http.Client as
+// Transport implements http.RoundTripper.
+type Transport struct {
+	RoundTripper http.RoundTripper
+}
+
+// RoundTrip implements http.Router interface to. It that transmits the trace id
+// from the incoming request to the next one. If the incoming request header does
+// not contain a trace id value, this method will generate a new one then set it
+// to the following request header. This RoundTipper is ideally placed
+// into a http client that will transmit the internal context's trace id through
+// the X-Trace-Id parameter to an external service.
 //  client := &Client{
 //		Params: p,
-//		client: &http.Client{Transport: ctxtrace.NewRoundTripper(nil)},
-//	}
-// An optional next http.RoundTripper can be given as parameter so that it
-// can be composed with other http.RoundTripper.
-func NewRoundTripper(tripper http.RoundTripper) http.RoundTripper {
-	if tripper == nil {
-		return &RoundTripper{r: http.DefaultTransport}
+//		client: &http.Client{Transport: ctxtrace.Transport{}},
+// 	}
+// An optional next http.RoundTripper can be given as Transport attribute
+// so that it can be composed with other http.RoundTripper.
+func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Make the zero value useful.
+	rt := t.RoundTripper
+	if rt == nil {
+		rt = http.DefaultTransport
 	}
-	return &RoundTripper{r: tripper}
-}
 
-// RoundTripper implements http.RoundTripper.
-type RoundTripper struct {
-	r           http.RoundTripper
-}
-
-// RoundTrip implements http.Router interface to. This RoundTipper is ideally
-// placed into a http client that will transmit the internal context's
-// trace id through the X-Trace-Id parameter to an external service.
-func (rt RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	setTraceHeader(req.Context(), req)
-	return rt.r.RoundTrip(req)
-}
-
-// setTraceHeader sets the given context trace id value into the given request
-// header trace id. If the given context does not contain a trace id value, this
-// method will generate a new one then set it to the request header.
-func setTraceHeader(ctx context.Context, req *http.Request) {
-	id := TraceIDFromContext(ctx)
-	if id == "" {
-		id = NewTraceID()
+	if req.Header.Get(TraceIDHeader) != "" {
+		// If the request already has a trace header don't overwrite it.
+		return rt.RoundTrip(req)
 	}
-	req.Header.Set(TraceIDHeader, id)
-}
 
-// traceIDFromRequest returns the trace id from the request header or creates
-// a new one if it is empty.
-func traceIDFromRequest(req *http.Request) string {
-	existingTraceID := req.Header.Get(TraceIDHeader)
-	if existingTraceID == "" {
-		return NewTraceID()
+	newReq := *req
+	newReq.Header = make(http.Header, len(req.Header) + 1)
+	// Copy headers from old to the new request.
+	for k, v := range req.Header {
+		newReq.Header[k] = v
 	}
-	return existingTraceID
+	traceID := TraceIDFromContext(newReq.Context())
+	if traceID == "" {
+		traceID = NewTraceID()
+	}
+	newReq.Header.Set(TraceIDHeader, traceID)
+	return rt.RoundTrip(&newReq)
 }
-
 
 // WithTestingTraceID returns a context with the given trace ID set with a fixed
 // testing prefix value indicating that this request should be considered for
