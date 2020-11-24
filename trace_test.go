@@ -4,6 +4,7 @@
 package ctxtrace_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,6 +19,36 @@ func TestNewTraceID(t *testing.T) {
 	traceID := ctxtrace.NewTraceID()
 
 	c.Assert(traceID, qt.Not(qt.IsNil))
+}
+
+func TestWithTraceIDEmpty(t *testing.T) {
+	c := qt.New(t)
+	ctx := ctxtrace.WithTraceID(context.Background(), "")
+	traceID := ctxtrace.TraceIDFromContext(ctx)
+	c.Assert(traceID, qt.Not(qt.IsNil))
+}
+
+func TestWithTraceID(t *testing.T) {
+	c := qt.New(t)
+	traceID := "id"
+	ctx := ctxtrace.WithTraceID(context.Background(), traceID)
+	traceIDFromContext := ctxtrace.TraceIDFromContext(ctx)
+	c.Assert(traceID, qt.Equals, traceIDFromContext)
+}
+
+func TestWithTestingTraceIDDoesNotPrependMultipleTimes(t *testing.T) {
+	c := qt.New(t)
+	traceID := "id"
+	ctx := ctxtrace.WithTestingTraceID(context.Background(), traceID)
+	ctx = ctxtrace.WithTestingTraceID(ctx, traceID)
+	c.Assert(ctxtrace.TraceIDFromContext(ctx), qt.Satisfies, ctxtrace.IsTestingTraceID)
+}
+
+func TestWithTestingTraceIDEmpty(t *testing.T) {
+	c := qt.New(t)
+	ctx := ctxtrace.WithTestingTraceID(context.Background(), "")
+	traceID := ctxtrace.TraceIDFromContext(ctx)
+	c.Assert(traceID, qt.Satisfies, ctxtrace.IsTestingTraceID)
 }
 
 func TestHandlerWhenNoHeaderIsGiven(t *testing.T) {
@@ -54,7 +85,7 @@ func TestNewRoundTripper(t *testing.T) {
 	srv := httptest.NewServer(ctxtrace.Handler(http.HandlerFunc(dummyHandler)))
 	defer srv.Close()
 
-	client := NewTestClient(TestRoundTripper{r: ctxtrace.Transport{}, c: c})
+	client := http.Client{Transport: TestRoundTripper{r: ctxtrace.Transport{}, c: c}}
 	_, err := client.Get(srv.URL)
 	c.Assert(err, qt.IsNil)
 }
@@ -67,13 +98,6 @@ type TestRoundTripper struct {
 }
 
 func (r TestRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	r.c.Assert(req.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
+	r.c.Check(req.Header.Get(ctxtrace.TraceIDHeader), qt.Not(qt.IsNil))
 	return r.r.RoundTrip(req)
-}
-
-// NewTestClient returns *http.Client with Transport replaced to avoid making real calls
-func NewTestClient(rt http.RoundTripper) *http.Client {
-	return &http.Client{
-		Transport: rt,
-	}
 }

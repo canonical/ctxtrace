@@ -15,7 +15,14 @@ import (
 )
 
 const (
+	// TraceIDHeader holds the header key that should be used when setting a
+	// http.Request or http.ResponseWriter. It is used internally so when
+	// using working with trace headers outside the library aiming to integrate
+	// with it, use this constant.
 	TraceIDHeader        = "X-Trace-Id"
+	// Similar to TraceIDHeader, it holds the context key for logging as a reference
+	// so that one does not need to replicate it on the different services using
+	// trace in their logging context.
 	TraceIDCtx           = "trace_id"
 	testingTraceIDPrefix = "testing-"
 )
@@ -27,12 +34,45 @@ func NewTraceID() string {
 	return uuid.New().String()
 }
 
-// WithTraceID returns a context.Context with the given trace ID set.
+// WithTraceID attaches the given ID to the given context. This ID will be
+// used by the Transport to provide the X-Trace-Id header for requests
+// containing a context with this value. If the given ID is "" then an new
+// random ID will be created.
 func WithTraceID(ctx context.Context, id string) context.Context {
+	traceID := id
+	if traceID == "" {
+		traceID = NewTraceID()
+	}
 	return context.WithValue(ctx, traceIDContextKey{}, id)
 }
 
-// TraceIDFromContext returns the trace ID for a given context, or an empty string if not set.
+// WithTestingTraceID attaches the given ID to the given context set with a fixed
+// testing prefix value indicating that this request should be considered for
+// testing purposes only. If the given ID is "" then an new random ID will be
+// created. This ID will be used by the Transport to provide the X-Trace-Id
+// header for requests containing a context with this value. This method could
+// be used to discard testing requests from the auditing process.
+func WithTestingTraceID(ctx context.Context, id string) context.Context {
+	traceID := id
+	if traceID == "" {
+		traceID = NewTraceID()
+	}
+	// Avoid prepending it again if it is already there.
+	if !strings.HasPrefix(traceID, testingTraceIDPrefix) {
+		traceID = testingTraceIDPrefix + traceID
+	}
+	return WithTraceID(ctx, traceID)
+}
+
+// IsTestingTraceID returns whether a trace id is specially crafted for testing
+// purposes only.
+func IsTestingTraceID(id string) bool {
+	return strings.HasPrefix(id, testingTraceIDPrefix)
+}
+
+
+// TraceIDFromContext returns the trace ID for a given context, or an empty
+// string if not set.
 func TraceIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(traceIDContextKey{}).(string)
 	return id
@@ -51,25 +91,31 @@ func Handler(h http.Handler) http.Handler {
 	})
 }
 
-// Transport implements http.RoundTripper.
-type Transport struct {
-	RoundTripper http.RoundTripper
-}
-
-// RoundTrip implements http.Router interface to. It that transmits the trace id
-// from the incoming request to the next one. If the incoming request header does
-// not contain a trace id value, this method will generate a new one then set it
-// to the following request header. This RoundTipper is ideally placed
-// into a http client that will transmit the internal context's trace id through
-// the X-Trace-Id parameter to an external service.
+// Transport implements http.RoundTripper. It transmits the trace id from the
+// incoming request to the next one. If the incoming request header does not
+// contain a trace id value, it will generate a new one then set it to the following
+// request header.
+// This RoundTipper is ideally placed into a http client that will transmit the
+// internal context's trace id through the X-Trace-Id parameter to an external service:
 //  client := &Client{
 //		Params: p,
 //		client: &http.Client{Transport: ctxtrace.Transport{}},
 // 	}
-// An optional next http.RoundTripper can be given as Transport attribute
-// so that it can be composed with other http.RoundTripper.
+// By default, Transport RoundTripper will be following by the http.DefaultTransport.
+// An optional next http.RoundTripper can be given as Transport attribute so that it
+// can be composed with other http.RoundTripper.
+type Transport struct {
+	// RoundTripper is an optional http.RoundTripper that will be called after
+	// Transport.RoundTrip has enriched the incoming request with the trace id
+	// header.
+	RoundTripper http.RoundTripper
+}
+
+// RoundTrip implements http.RoundTripper interface to transfer the trace id, or
+// creating a new one if it is empty, from the incoming request to the following
+// http.RoundTripper. It is followed by http.DefaultTransport or a given RoundTripper
+// when declaring Transport.
 func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Make the zero value useful.
 	rt := t.RoundTripper
 	if rt == nil {
 		rt = http.DefaultTransport
@@ -92,18 +138,4 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	newReq.Header.Set(TraceIDHeader, traceID)
 	return rt.RoundTrip(&newReq)
-}
-
-// WithTestingTraceID returns a context with the given trace ID set with a fixed
-// testing prefix value indicating that this request should be considered for
-// testing purposes only. This method could be used to discard testing requests
-// from the auditing process.
-func WithTestingTraceID(ctx context.Context, id string) context.Context {
-	return WithTraceID(ctx, testingTraceIDPrefix+id)
-}
-
-// IsTestingTraceID returns whether a trace id is specially crafted for testing
-// purposes only.
-func IsTestingTraceID(id string) bool {
-	return strings.HasPrefix(id, testingTraceIDPrefix)
 }
